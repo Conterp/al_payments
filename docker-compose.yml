@@ -3,6 +3,7 @@ version: "3.9"
 services:
   app:
     build: .
+    image: conterp-al-payments-app:latest
     container_name: al-payments-sync
     env_file: .env
     restart: "no"
