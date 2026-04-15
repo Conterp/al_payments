@@ -222,6 +222,12 @@ def main() -> int:
             len(df_delete_wrong_board_result) + len(df_move_wrong_group_result) + len(df_delete_no_origin_result),
         )
 
+        print_stage("ETAPA 14.1 - RELOAD AUDITORIA FINAL")
+        stage_perf = log_ckpt_start("reload_destination_audit_final")
+        df_dest_audit_final = build_df_destination_audit()
+        print_df("df_dest_audit_final", df_dest_audit_final)
+        log_ckpt_end("reload_destination_audit_final", stage_perf, len(df_dest_audit_final))
+
         print_stage("ETAPA 15 - RESUMO FINAL")
         stage_perf = log_ckpt_start("build_summary")
         df_summary = build_df_execution_summary(
@@ -246,7 +252,7 @@ def main() -> int:
 
         print_stage("ETAPA 15.1 - RECONCILIACAO POR DESTINO")
         stage_perf = log_ckpt_start("reconcile_by_dest")
-        df_actual_by_dest = build_df_actual_by_dest(df_dest_audit=df_dest_audit)
+        df_actual_by_dest = build_df_actual_by_dest(df_dest_audit=df_dest_audit_final)
         df_reconcile_by_dest = build_df_reconcile_by_dest(
             df_expected_by_dest=df_expected_by_dest,
             df_actual_by_dest=df_actual_by_dest,
