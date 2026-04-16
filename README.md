@@ -1,46 +1,129 @@
-# AL Payments
+# ?? AL-PAYMENTS-SYNC
 
-Pipeline para sincronizacao e saneamento do board de pagamentos no Monday.com.
+Pipeline automatizado para organizar os **pagamentos realizados** no Monday.com em uma estrutura de **Access Level**, garantindo que cada liderança visualize apenas os itens dos seus respectivos centros de custo.
 
-## Fluxo
+---
 
-1. Le origem (boards Py de pagamentos realizados)
-2. Le destino (5 boards de pagamentos)
-3. Normaliza dados
-4. Filtra somente registros `matched` por centro de custo
-5. Calcula diff por `(ID_NORM, BOARD_EXPECTED)`
-6. Dedupe pre-enrich por ID
-7. Enriquece dados para create
-8. Cria itens faltantes no destino
-9. Recarrega destino para auditoria
-10. Detecta e remove duplicados
-11. Detecta wrong board / wrong group / no origin
-12. Aplica deletes e moves corretivos
-13. Gera resumo final
+## ?? O que ele faz
 
-## Regras de negocio importantes
+- Lê pagamentos realizados da origem e itens do destino
+- Normaliza e cruza dados por `ID`
+- Filtra apenas centros de custo mapeados (`matched`)
+- Identifica itens faltantes no destino
+- Enriquece dados da origem para criação
+- Cria itens faltantes no board correto
+- Detecta e remove duplicados
+- Corrige itens em board/grupo errado
+- Remove itens sem origem
+- Gera resumo operacional por etapa
+- Gera reconciliação final por destino (`EXPECTED`, `ACTUAL`, `DELTA`)
 
-- O pipeline considera apenas os 5 centros de custo mapeados nos boards de destino.
-- Registros fora desse escopo sao ignorados silenciosamente.
-- `no_match`, `conflict` e `origem_invalid_id` nao fazem parte do fluxo operacional.
-- Dedupe de destino mantem o menor `ID_ITEM_MONDAY_DESTINO` (mais antigo).
+---
 
-## Execucao local
+## ?? Access Level (1 de 4 pipelines)
 
+Este pipeline é o **1/4** do projeto de níveis de acesso no Monday.com.
+
+- Prefixo `AL` = **Access Level**
+- O projeto completo é composto por 4 pipelines integrados
+- Este repositório cobre o fluxo de **payments realizados sync**
+
+---
+
+## ?? Estrutura (resumida)
+
+```bash
+al_payments/
++-- Dockerfile
++-- docker-compose.yml
++-- requirements.txt
++-- src/
+    +-- main.py
+    +-- config/settings.py
+    +-- core/monday/
+        +-- execute_monday_query.py
+        +-- origin/
+        ¦   +-- fetch_origin_items.py
+        ¦   +-- enrich_origin_items.py
+        +-- destination/
+            +-- fetch/
+            +-- payload/
+            +-- actions/
+            ¦   +-- duplicates/
+            ¦   +-- orphans/
+            +-- summary/
+```
+
+---
+
+## ?? Configuração
+
+Crie o `.env` a partir do exemplo e preencha as variáveis obrigatórias:
+
+```env
+MONDAY_API_TOKEN=seu_token
+MONDAY_BASE_URL=https://api.monday.com/v2
+PIPELINE_SHOW_PROGRESS=true
+```
+
+> Use sempre `CHAVE=valor` sem aspas e sem espaço após `=`.
+
+---
+
+## ?? Execução
+
+### Local
 ```bash
 python -u -m src.main
 ```
 
-## Docker
-
+### Docker
 ```bash
 docker compose up --build
 ```
 
-## Airflow (exemplo)
+---
+
+## ??? Airflow (produção)
+
+- `dag_id`: `al_payments_sync`
+- cron: `10 9,21 * * 1-6` (seg-sáb: 09:10 e 21:10)
+
+Comando da task:
 
 ```bash
 docker run --rm \
   --env-file /opt/automations/al_payments/.env \
   conterp-al-payments-app:latest
 ```
+
+---
+
+## ?? Saída operacional
+
+O pipeline imprime:
+
+- checkpoints por etapa (`CKPT START/END`)
+- DataFrames de controle por etapa
+- auditoria de inconsistências (`wrong board`, `wrong group`, `no origin`)
+- resumo final de execução
+- reconciliação por destino:
+  - `DESTINO_KEY`
+  - `EXPECTED_ROWS`
+  - `ACTUAL_ROWS`
+  - `DELTA`
+
+---
+
+## ?? Segurança
+
+- Segredos via `.env` (não versionar)
+- Execução conteinerizada
+- Retry/backoff para chamadas de API
+- Recomenda-se rotação periódica do token da API
+
+---
+
+## ?? Autor
+
+**Time Conterp**
