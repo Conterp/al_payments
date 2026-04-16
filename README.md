@@ -25,7 +25,11 @@ Pipeline automatizado para organizar os **pagamentos realizados** no Monday.com 
 Este pipeline é o **1/4** do projeto de níveis de acesso no Monday.com.
 
 - Prefixo `AL` = **Access Level**
-- O projeto completo é composto por 4 pipelines integrados
+- O projeto completo é composto por 4 pipelines integrados:
+  - **AFs Geradas**
+  - **Base RH**
+  - **Pagamentos Realizados**
+  - **Faturamento**
 - Este repositório cobre o fluxo de **payments realizados sync**
 
 ---
