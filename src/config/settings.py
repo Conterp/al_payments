@@ -98,6 +98,9 @@ BOARDS_ORIGEM: Dict[str, Dict[str, str]] = {
     "PY_2026_JAN_JUN": {
         "board_id": "18393715465",
         "board_name": "[Py] Pagamentos Realizados Jan - Jun 2026",
+    },"PY_2026_JUL_DEZ": {
+        "board_id": "18419936354",
+        "board_name": "[Py] Pagamentos Realizados Jul - Dez 2026",
     },
 }
 
