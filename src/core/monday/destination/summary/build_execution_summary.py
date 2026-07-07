@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any, Dict, List, Tuple
+import json
 import time
 from typing import Tuple
 
@@ -191,3 +193,225 @@ def build_df_reconcile_by_dest(
     )
 
     return df_reconcile_by_dest.sort_values("DESTINO_KEY").reset_index(drop=True)
+
+def _df_to_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
+    if df is None or df.empty:
+        return []
+
+    df_safe = df.astype(object).where(pd.notnull(df), None)
+    return df_safe.to_dict(orient="records")
+
+
+def _to_number(value: Any) -> int:
+    if value in (None, ""):
+        return 0
+
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _find_by_action(records: List[Dict[str, Any]], action: str) -> Dict[str, Any]:
+    return next(
+        (item for item in records if item.get("ACTION") == action),
+        {},
+    )
+
+
+def _find_by_destino(records: List[Dict[str, Any]], destino_key: str) -> Dict[str, Any]:
+    return next(
+        (item for item in records if item.get("DESTINO_KEY") == destino_key),
+        {},
+    )
+
+
+def _get_action_metric(
+    records: List[Dict[str, Any]],
+    action: str,
+    metric: str,
+) -> int:
+    item = _find_by_action(records, action)
+    return _to_number(item.get(metric))
+
+
+def _get_destino_metric(
+    records: List[Dict[str, Any]],
+    destino_key: str,
+    metric: str,
+) -> int:
+    item = _find_by_destino(records, destino_key)
+    return _to_number(item.get(metric))
+
+
+def build_summary_payload(
+    df_execution_summary: pd.DataFrame,
+    df_reconciliation_summary: pd.DataFrame,
+) -> Dict[str, Any]:
+    execution_summary = _df_to_records(df_execution_summary)
+    reconciliation_summary = _df_to_records(df_reconciliation_summary)
+
+    execution_rows = [
+        item
+        for item in execution_summary
+        if item.get("ACTION") != "PIPELINE DURATION"
+    ]
+
+    pipeline_duration = _find_by_action(
+        execution_summary,
+        "PIPELINE DURATION",
+    ).get("PLANNED", "")
+
+    return {
+        "pipeline": "payments",
+
+        "execution_summary": execution_summary,
+        "reconciliation_summary": reconciliation_summary,
+
+        "create_destination_items_planned": _get_action_metric(execution_summary, "CREATE DESTINATION ITEMS", "PLANNED"),
+        "create_destination_items_success": _get_action_metric(execution_summary, "CREATE DESTINATION ITEMS", "SUCCESS"),
+        "create_destination_items_error": _get_action_metric(execution_summary, "CREATE DESTINATION ITEMS", "ERROR"),
+
+        "delete_duplicates_planned": _get_action_metric(execution_summary, "DELETE DUPLICATES", "PLANNED"),
+        "delete_duplicates_success": _get_action_metric(execution_summary, "DELETE DUPLICATES", "SUCCESS"),
+        "delete_duplicates_error": _get_action_metric(execution_summary, "DELETE DUPLICATES", "ERROR"),
+
+        "delete_wrong_board_planned": _get_action_metric(execution_summary, "DELETE WRONG BOARD", "PLANNED"),
+        "delete_wrong_board_success": _get_action_metric(execution_summary, "DELETE WRONG BOARD", "SUCCESS"),
+        "delete_wrong_board_error": _get_action_metric(execution_summary, "DELETE WRONG BOARD", "ERROR"),
+
+        "move_wrong_group_planned": _get_action_metric(execution_summary, "MOVE WRONG GROUP", "PLANNED"),
+        "move_wrong_group_success": _get_action_metric(execution_summary, "MOVE WRONG GROUP", "SUCCESS"),
+        "move_wrong_group_error": _get_action_metric(execution_summary, "MOVE WRONG GROUP", "ERROR"),
+
+        "delete_no_origin_planned": _get_action_metric(execution_summary, "DELETE NO ORIGIN", "PLANNED"),
+        "delete_no_origin_success": _get_action_metric(execution_summary, "DELETE NO ORIGIN", "SUCCESS"),
+        "delete_no_origin_error": _get_action_metric(execution_summary, "DELETE NO ORIGIN", "ERROR"),
+
+        "pipeline_duration": pipeline_duration,
+
+        "execution_total_planned": sum(_to_number(item.get("PLANNED")) for item in execution_rows),
+        "execution_total_success": sum(_to_number(item.get("SUCCESS")) for item in execution_rows),
+        "execution_total_error": sum(_to_number(item.get("ERROR")) for item in execution_rows),
+        "execution_has_error": any(_to_number(item.get("ERROR")) > 0 for item in execution_rows),
+
+        "atp_expected_rows": _get_destino_metric(reconciliation_summary, "ATP", "EXPECTED_ROWS"),
+        "atp_actual_rows": _get_destino_metric(reconciliation_summary, "ATP", "ACTUAL_ROWS"),
+        "atp_delta": _get_destino_metric(reconciliation_summary, "ATP", "DELTA"),
+
+        "eneva_expected_rows": _get_destino_metric(reconciliation_summary, "ENEVA", "EXPECTED_ROWS"),
+        "eneva_actual_rows": _get_destino_metric(reconciliation_summary, "ENEVA", "ACTUAL_ROWS"),
+        "eneva_delta": _get_destino_metric(reconciliation_summary, "ENEVA", "DELTA"),
+
+        "fluidos_mar_expected_rows": _get_destino_metric(reconciliation_summary, "FLUIDOS_MAR", "EXPECTED_ROWS"),
+        "fluidos_mar_actual_rows": _get_destino_metric(reconciliation_summary, "FLUIDOS_MAR", "ACTUAL_ROWS"),
+        "fluidos_mar_delta": _get_destino_metric(reconciliation_summary, "FLUIDOS_MAR", "DELTA"),
+
+        "fs_bio_cpt01_expected_rows": _get_destino_metric(reconciliation_summary, "FS_BIO_CPT01", "EXPECTED_ROWS"),
+        "fs_bio_cpt01_actual_rows": _get_destino_metric(reconciliation_summary, "FS_BIO_CPT01", "ACTUAL_ROWS"),
+        "fs_bio_cpt01_delta": _get_destino_metric(reconciliation_summary, "FS_BIO_CPT01", "DELTA"),
+
+        "spts_expected_rows": _get_destino_metric(reconciliation_summary, "SPTS", "EXPECTED_ROWS"),
+        "spts_actual_rows": _get_destino_metric(reconciliation_summary, "SPTS", "ACTUAL_ROWS"),
+        "spts_delta": _get_destino_metric(reconciliation_summary, "SPTS", "DELTA"),
+
+        "reconciliation_total_expected_rows": sum(_to_number(item.get("EXPECTED_ROWS")) for item in reconciliation_summary),
+        "reconciliation_total_actual_rows": sum(_to_number(item.get("ACTUAL_ROWS")) for item in reconciliation_summary),
+        "reconciliation_total_delta": sum(_to_number(item.get("DELTA")) for item in reconciliation_summary),
+        "reconciliation_has_divergence": any(_to_number(item.get("DELTA")) != 0 for item in reconciliation_summary),
+    }
+
+if __name__ == "__main__":
+    from src.core.webhook.send_to_n8n import send_summary_to_n8n
+
+    df_execution_summary_test = pd.DataFrame(
+        [
+            {
+                "STEP": 0,
+                "ACTION": "CREATE DESTINATION ITEMS",
+                "PLANNED": 2,
+                "SUCCESS": 2,
+                "ERROR": 0,
+            },
+            {
+                "STEP": 1,
+                "ACTION": "DELETE DUPLICATES",
+                "PLANNED": 1,
+                "SUCCESS": 1,
+                "ERROR": 0,
+            },
+            {
+                "STEP": 2,
+                "ACTION": "DELETE WRONG BOARD",
+                "PLANNED": 0,
+                "SUCCESS": 0,
+                "ERROR": 0,
+            },
+            {
+                "STEP": 3,
+                "ACTION": "MOVE WRONG GROUP",
+                "PLANNED": 3,
+                "SUCCESS": 2,
+                "ERROR": 1,
+            },
+            {
+                "STEP": 4,
+                "ACTION": "DELETE NO ORIGIN",
+                "PLANNED": 1,
+                "SUCCESS": 1,
+                "ERROR": 0,
+            },
+            {
+                "STEP": 5,
+                "ACTION": "PIPELINE DURATION",
+                "PLANNED": "3m 45s",
+                "SUCCESS": "",
+                "ERROR": "",
+            },
+        ]
+    )
+
+    df_reconciliation_summary_test = pd.DataFrame(
+        [
+        
+            {
+                "DESTINO_KEY": "ATP",
+                "EXPECTED_ROWS": 2487,
+                "ACTUAL_ROWS": 2487,
+                "DELTA": 0,
+            },
+            {
+                "DESTINO_KEY": "ENEVA",
+                "EXPECTED_ROWS": 2198,
+                "ACTUAL_ROWS": 2204,
+                "DELTA": 6,
+            },
+            {
+                "DESTINO_KEY": "FLUIDOS_MAR",
+                "EXPECTED_ROWS": 312,
+                "ACTUAL_ROWS": 309,
+                "DELTA": -3,
+            },
+            {
+                "DESTINO_KEY": "FS_BIO_CPT01",
+                "EXPECTED_ROWS": 142,
+                "ACTUAL_ROWS": 142,
+                "DELTA": 0,
+            },
+            {
+                "DESTINO_KEY": "SPTS",
+                "EXPECTED_ROWS": 317,
+                "ACTUAL_ROWS": 301,
+                "DELTA": -16,
+            },
+        ]
+        
+    )
+
+    payload = build_summary_payload(
+        df_execution_summary=df_execution_summary_test,
+        df_reconciliation_summary=df_reconciliation_summary_test,
+    )
+
+    send_summary_to_n8n(payload)
+    print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
