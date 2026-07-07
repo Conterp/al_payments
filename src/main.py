@@ -45,9 +45,11 @@ from src.core.monday.destination.summary.build_execution_summary import (
     build_df_execution_summary,
     build_df_expected_by_dest,
     build_df_reconcile_by_dest,
+    build_summary_payload,
 )
 from src.core.monday.origin.enrich_origin_items import build_df_enriched
 from src.core.monday.origin.fetch_origin_items import build_df_origem
+from src.core.webhook.send_to_n8n import send_summary_to_n8n
 
 
 def log_info(message: str) -> None:
@@ -260,6 +262,15 @@ def main() -> int:
         # print_df("df_actual_by_dest", df_actual_by_dest)
         print_df("df_reconcile_by_dest", df_reconcile_by_dest)
         log_ckpt_end("reconcile_by_dest", stage_perf, len(df_reconcile_by_dest))
+
+        print_stage("ETAPA 15.2 - ENVIAR RESUMO PARA N8N")
+        stage_perf = log_ckpt_start("send_summary_to_n8n")
+        summary_payload = build_summary_payload(
+            df_execution_summary=df_summary,
+            df_reconciliation_summary=df_reconcile_by_dest,
+        )
+        send_summary_to_n8n(summary_payload)
+        log_ckpt_end("send_summary_to_n8n", stage_perf)
 
         print_stage("Pipeline AL_PAYMENTS concluido")
         return 0

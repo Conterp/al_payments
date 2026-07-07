@@ -52,8 +52,15 @@ def _mask_token(token: Optional[str], head: int = 4, tail: int = 3) -> str:
     return f"{token[:head]}...{token[-tail:]} (len={len(token)})"
 
 
+def _preview(value: Optional[str], size: int = 12) -> str:
+    if not value:
+        return "MISSING"
+    value = str(value)
+    return value[:size] + ("..." if len(value) > size else "")
+
+
 LOG_PREFIX: str = _get_str("PIPELINE_LOG_PREFIX", "[PAYMENTS]") or "[PAYMENTS]"
-API_URL: str = _get_str("MONDAY_BASE_URL", "https://api.monday.com/v2") or "https://api.monday.com/v2"
+API_URL: Optional[str] = _get_str("MONDAY_BASE_URL")
 TOKEN_MONDAY: Optional[str] = _get_str("MONDAY_API_TOKEN")
 
 HEADERS: Dict[str, str] = {
@@ -85,6 +92,10 @@ DELETE_DUPLICATE_DRY_RUN: bool = _get_bool("PIPELINE_DELETE_DUPLICATE_DRY_RUN", 
 DELETE_WRONG_BOARD_DRY_RUN: bool = _get_bool("PIPELINE_DELETE_WRONG_BOARD_DRY_RUN", False)
 DELETE_NO_ORIGIN_DRY_RUN: bool = _get_bool("PIPELINE_DELETE_NO_ORIGIN_DRY_RUN", False)
 MOVE_WRONG_GROUP_DRY_RUN: bool = _get_bool("PIPELINE_MOVE_WRONG_GROUP_DRY_RUN", False)
+
+# n8n
+N8N_SUMMARY_WEBHOOK_URL: Optional[str] = _get_str("N8N_SUMMARY_WEBHOOK_URL")
+N8N_REQUEST_TIMEOUT: int = _get_int("N8N_REQUEST_TIMEOUT", 60)
 
 BOARDS_ORIGEM: Dict[str, Dict[str, str]] = {
     "PY_2025_JAN_JUN": {
@@ -183,6 +194,8 @@ def check_required_envs() -> None:
         name
         for name, value in [
             ("MONDAY_API_TOKEN", TOKEN_MONDAY),
+            ("MONDAY_BASE_URL", API_URL),
+            ("N8N_SUMMARY_WEBHOOK_URL", N8N_SUMMARY_WEBHOOK_URL),
         ]
         if not value
     ]
@@ -192,8 +205,12 @@ def check_required_envs() -> None:
         raise RuntimeError(f"Variaveis obrigatorias ausentes:\n{missing_lines}")
 
     print(f"{LOG_PREFIX} [INFO] Configuracao carregada com sucesso")
-    print(f"{LOG_PREFIX} [INFO] Monday URL: {API_URL}")
+    print(f"{LOG_PREFIX} [INFO] Monday URL: {_preview(API_URL)}")
     print(f"{LOG_PREFIX} [INFO] Token: {_mask_token(TOKEN_MONDAY)}")
+    print(
+        f"{LOG_PREFIX} [INFO] n8n: webhook={_preview(N8N_SUMMARY_WEBHOOK_URL)} "
+        f"| timeout={N8N_REQUEST_TIMEOUT}s"
+    )
     print(
         f"{LOG_PREFIX} [INFO] Dry-runs => "
         f"create={CREATE_DRY_RUN} | "
@@ -202,3 +219,7 @@ def check_required_envs() -> None:
         f"no_origin_delete={DELETE_NO_ORIGIN_DRY_RUN} | "
         f"wrong_group_move={MOVE_WRONG_GROUP_DRY_RUN}"
     )
+
+
+if __name__ == "__main__":
+    check_required_envs()
